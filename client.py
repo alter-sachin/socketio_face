@@ -8,7 +8,26 @@ import zlib
 import base64
 import socketio
 
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
+
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app)
+
 sio = socketio.Client()
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@socketio.on('my event')
+def test_message(message):
+    emit('my response', {'data': 'got it!'})
+
+
 
 
 @sio.on('connect')
@@ -40,34 +59,40 @@ def myy_response(data):
 def on_disconnect(): 
     print('I\'m disconnected!') 
 
-ws = 'http://127.0.0.1:5000'
-
-sio.connect(ws)
 
 
-cam = cv2.VideoCapture(0)
-time.sleep(2);
-cam.set(3, 800);
-cam.set(4, 600);
+def opencv_cam():
+    cam = cv2.VideoCapture(0)
+    time.sleep(2);
+    cam.set(3, 800);
+    cam.set(4, 600);
 
-img_counter = 0
+    img_counter = 0
 
-encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
-while True:
-    ret, frame = cam.read()
-    result, frame = cv2.imencode('.jpg', frame, encode_param)
-#    data = zlib.compress(pickle.dumps(frame, 0))
-    data = base64.b64encode(frame)
-    size = len(data)
-    pi_id = [3]
-    pi_id_bytes = bytes(pi_id)
-    length = len(pi_id_bytes)
-    total_size = size + length
+    while True:
+        ret, frame = cam.read()
+        result, frame = cv2.imencode('.jpg', frame, encode_param)
+    #    data = zlib.compress(pickle.dumps(frame, 0))
+        data = base64.b64encode(frame)
+        size = len(data)
+        pi_id = [3]
+        pi_id_bytes = bytes(pi_id)
+        length = len(pi_id_bytes)
+        total_size = size + length
 
 
-    print("{}: {}".format(img_counter, size))
-    sio.emit('my_message',{'message':data,'piname':"pisachin"})
-    img_counter += 1
+        print("{}: {}".format(img_counter, size))
+        sio.emit('my_message',{'message':data,'piname':"pisachin",'image_counter':img_counter})
+        img_counter += 1
 
-cam.release()
+    cam.release()
+
+
+if __name__ == '__main__':
+    ws = 'http://127.0.0.1:5000'
+    sio.connect(ws)
+    thread1 = Thread(target=opencv)
+    thread1.start()
+    socketio.run(app)
