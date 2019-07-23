@@ -34,7 +34,7 @@ import os
 from threading import Thread
 import pickle
 
-
+people_dict ={}
 
 if async_mode is None:
     try:
@@ -133,26 +133,15 @@ def test_message(message):
 @socketio.on('my_message')
 def my_message(data):
     global thread
-
+    unlock_time = 0
     #print('message ', data)
     image_data = data['message']  # encoded picture.
-    #pi_name = data['pi_name']
-    #b64_src = 'data:image/jpg;base64,'
-    #b64_string = image_data.decode()
+
     nparr = np.fromstring(base64.b64decode(image_data), np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    #cv2_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    #new_image = b64_src + image_data
-    #frame = base64.b64decode(image_data)
 
-    #base64_decframeoded = base64.b64encode(frame).decode()
     t = str(time.clock())
 
-    #print("printing base64")
-    #while counterxx < 1:
-    #with open('test.jpg', 'wb') as f_output:
-       #f_output.write(img)
-    #print(frame)
     try:
         #frame = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
         small_frame = cv2.resize(img,(0,0),fx=0.25,fy=0.25)
@@ -160,41 +149,59 @@ def my_message(data):
     except Exception as e:
         print(e)
 
-    initial_face_names = list(all_face_encodings.keys())
-
-    total_face_encodings = np.array(list(all_face_encodings.values()))
-
-    while True:
-        print("Inside Recognition")
-        print("starting to find location of person in image")
-        face_locations = face_recognition.face_locations(
-            rgb_small_frame, number_of_times_to_upsample=1, model="hog")
-        face_encodings = face_recognition.face_encodings(
-            rgb_small_frame, face_locations)
+    
+    print("Inside Recognition")
+    print("starting to find location of person in image")
+    face_locations = face_recognition.face_locations(
+        rgb_small_frame, number_of_times_to_upsample=1, model="hog")
+    face_encodings = face_recognition.face_encodings(
+        rgb_small_frame, face_locations)
         
-        face_names = []
-        for face_encoding in face_encodings:
-            matches = face_recognition.compare_faces(
-                total_face_encodings, face_encoding, tolerance=0.44)
-            name = "Unknown"
+    face_names = []
+    for face_encoding in face_encodings:
+        matches = face_recognition.compare_faces(
+            total_face_encodings, face_encoding, tolerance=0.44)
+        name = "Unknown"
 
 
-            face_distances = face_recognition.face_distance(
-                total_face_encodings, face_encoding)
-            best_match_index = np.argmin(face_distances)
-            second_best_match_index = np.partition(face_distances,1)[1]
-            print("best_match index is"+str(face_distances[best_match_index]))
-            print("second best_match value is"+str(second_best_match_index))
-            diff_me = face_distances[best_match_index] - second_best_match_index
-            print("difference is " + str(diff_me))
-            abs_diff = abs(diff_me)
+        face_distances = face_recognition.face_distance(
+            total_face_encodings, face_encoding)
+        best_match_index = np.argmin(face_distances)
+        second_best_match_index = np.partition(face_distances,1)[1]
+        print("best_match index is"+str(face_distances[best_match_index]))
+        print("second best_match value is"+str(second_best_match_index))
+        diff_me = face_distances[best_match_index] - second_best_match_index
+        print("difference is " + str(diff_me))
+        abs_diff = abs(diff_me)
+
+        if matches[best_match_index] and (abs_diff>.03):
+            name = total_face_names[best_match_index]
+            string_name = str(name)
+            if(int(people_dict[string_name])<1):
+                print("hells")
+                people_dict[string_name] +=1
+                print("inside if")
+                continue
+            else:
+                people_dict[string_name]+=1
+                print("Unlock")
+                unlock_time = time.time()
+                print("detected name"+ string_name+"so unlocking")
+                cv2.imwrite("detections/"+string_name+".png",rgb_small_frame)
+                emit('gresponse',
+                    {'data': 'Disconnected!', 'time': string_name})
+                people_dict[string_name] = 0
+                continue
+    before_lock_time = time.time()
+    diff_time = before_lock_time - unlock_time
+    print("this is diff time"+str(diff_time))
+    if(diff_time>1.50000):
+        print("lock")
+        
 
 
 
-
-
-    emit('gresponse',
-         {'data': 'Disconnected!', 'time': abs_diff})
+    
     #if thread is None:
     #  thread = socketio.start_background_task(background_thread2,frame)
 
@@ -223,8 +230,17 @@ def test_disconnect():
 if __name__ == '__main__':
     print("loading saved encodings")
     #global all_face_encodings
+    
+    people_dict = {}
     with open('saved_encoding/dataset_11july.dat', 'rb') as f:
         all_face_encodings = pickle.load(f)
+    initial_face_names = list(all_face_encodings.keys())
+    total_face_names = list(all_face_encodings.keys())
+    total_face_encodings = np.array(list(all_face_encodings.values()))
+    for name_keys in initial_face_names:
+        people_dict[str(name_keys)] = 0
+
+
     socketio.run(app, debug=True)
 
 
